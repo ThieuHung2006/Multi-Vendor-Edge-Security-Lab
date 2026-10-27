@@ -1,6 +1,5 @@
 # Multi-Vendor Edge Security Lab: pfSense and FortiGate with Multi-WAN, IPsec/GRE with eBGP, Suricata IPS and Remote Logging (EVE-NG)
 
-**Author:** [Your name]
 **Platform:** pfSense CE (HQ), Fortinet FortiGate-VM (Branch), Cisco IOL (ISPs), Kali Linux, EVE-NG
 **Type:** Simulated lab / Proof of Concept. This is not a production deployment.
 
@@ -22,7 +21,7 @@ Limitations, including tests that could not be completed, are listed in Section 
 
 ## 1. Topology and Addressing
 
-![Figure 1.1: Lab topology on EVE-NG](./images/p2_01_topology.png)
+![Figure 1.1: Lab topology on EVE-NG](./images/topo-eve-ng.png)
 
 | Segment | Zone | Interface | Subnet | Gateway / VIP | Purpose |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -45,29 +44,29 @@ Internal segments use RFC 1918 space. Transit and attacker links use documentati
 
 ### 2.1 Interface mapping
 
-![Figure 2.1: pfSense interface assignments](./images/p2_02_pfsense_interfaces.png)
+![Figure 2.1: pfSense interface assignments](./images/lld-pfsense-ifaces.png)
 
-![Figure 2.2: FortiGate interface configuration](./images/p2_03_fortigate_interfaces.png)
+![Figure 2.2: FortiGate interface configuration](./images/lld-forti-ifaces.png)
 
-* pfSense maps `vtnet0` to `vtnet4` to management, WAN2, WAN1, DMZ and LAN.
-* FortiGate uses `port1` (management), `port2` (WAN2), `port3` (WAN1) and `port4` (Branch LAN).
+- pfSense maps `vtnet0` to `vtnet4` to management, WAN2, WAN1, DMZ and LAN.
+- FortiGate uses `port1` (management), `port2` (WAN2), `port3` (WAN1) and `port4` (Branch LAN).
 
 ### 2.2 DHCP
 
-![Figure 2.3: DHCP server on the pfSense LAN](./images/p2_04_dhcp_server.png)
+![Figure 2.3: DHCP server on the pfSense LAN](./images/lld-dhcp-lan.png)
 
-![Figure 2.4: Active DHCP lease](./images/p2_05_dhcp_lease.png)
+![Figure 2.4: Active DHCP lease](./images/uat-dhcp-lease.png)
 
-* Pool `10.10.10.50` to `10.10.10.100` on `vtnet4`, lease time 7200 s.
-* The HQ VPCS received `10.10.10.50/24` (MAC `00:50:79:66:68:0a`).
+- Pool `10.10.10.50` to `10.10.10.100` on `vtnet4`, lease time 7200 s.
+- The HQ VPCS received `10.10.10.50/24` (MAC `00:50:79:66:68:0a`).
 
 ### 2.3 Multi-WAN gateway group
 
-![Figure 2.5: Gateway group WAN_FAILOVER](./images/p2_06_gateway_group.png)
+![Figure 2.5: Gateway group WAN_FAILOVER](./images/lld-wan-failover.png)
 
-* Gateway group `WAN_FAILOVER`: Tier 1 `GW_WAN1` (`198.51.100.1`), Tier 2 `GW_WAN2` (`198.51.200.1`).
-* Trigger: packet loss above 20% or latency above 500 ms.
-* This group controls **Internet-bound traffic from pfSense**. It does not move the VPN tunnel to WAN2 (Section 9).
+- Gateway group `WAN_FAILOVER`: Tier 1 `GW_WAN1` (`198.51.100.1`), Tier 2 `GW_WAN2` (`198.51.200.1`).
+- Trigger: packet loss above 20% or latency above 500 ms.
+- This group controls **Internet-bound traffic from pfSense**. It does not move the VPN tunnel to WAN2 (Section 9).
 
 ---
 
@@ -75,31 +74,31 @@ Internal segments use RFC 1918 space. Transit and attacker links use documentati
 
 ### 3.1 Firewall rules on WAN1 for the tunnel underlay
 
-![Figure 3.1: ICMP allowed for reachability and monitoring](./images/p2_07_wan_rule_icmp.png)
+![Figure 3.1: ICMP allowed for reachability and monitoring](./images/lld-rule-wan-icmp.png)
 
-![Figure 3.2: UDP 500 and 4500 (IKE and NAT-T)](./images/p2_08_wan_rule_ike.png)
+![Figure 3.2: UDP 500 and 4500 (IKE and NAT-T)](./images/lld-rule-wan-ike.png)
 
-![Figure 3.3: ESP (IP protocol 50)](./images/p2_09_wan_rule_esp.png)
+![Figure 3.3: ESP (IP protocol 50)](./images/lld-rule-wan-esp.png)
 
 ### 3.2 IPsec parameters
 
-* IKE version: IKEv2, authentication by pre-shared key.
-* Diffie-Hellman group 14 (2048-bit MODP), PFS enabled with group 14.
-* Phase 2 selectors: `0.0.0.0/0` to `0.0.0.0/0` (routing decides what enters the tunnel).
+- IKE version: IKEv2, authentication by pre-shared key.
+- Diffie-Hellman group 14 (2048-bit MODP), PFS enabled with group 14.
+- Phase 2 selectors: `0.0.0.0/0` to `0.0.0.0/0` (routing decides what enters the tunnel).
 
-![Figure 3.4: FortiGate Phase 1 configuration](./images/p2_10_fortigate_phase1.png)
+![Figure 3.4: FortiGate Phase 1 configuration](./images/lld-forti-vti-p1.png)
 
-![Figure 3.5: pfSense Phase 2 configuration](./images/p2_11_pfsense_phase2.png)
+![Figure 3.5: pfSense Phase 2 configuration](./images/lld-ipsec-vti-p2.png)
 
 The FortiGate Phase 1 targets remote gateway `198.51.100.2` through `port3`.
 
 ### 3.3 GRE inside the IPsec tunnel
 
-* FortiGate endpoint `198.18.1.2`, pfSense endpoint `198.51.100.2`.
-* GRE subnet `10.254.1.0/30` (pfSense `10.254.1.1`, FortiGate `10.254.1.2`).
-* The interface shows MTU 1476. The effective MTU with IPsec on top was not measured.
+- FortiGate endpoint `198.18.1.2`, pfSense endpoint `198.51.100.2`.
+- GRE subnet `10.254.1.0/30` (pfSense `10.254.1.1`, FortiGate `10.254.1.2`).
+- The interface shows MTU 1476. The effective MTU with IPsec on top was not measured.
 
-![Figure 3.6: FortiGate GRE interface status](./images/p2_12_gre_status.png)
+![Figure 3.6: FortiGate GRE interface status](./images/uat-gre-status.png)
 
 ---
 
@@ -107,31 +106,31 @@ The FortiGate Phase 1 targets remote gateway `198.51.100.2` through `port3`.
 
 ### 4.1 BGP setup
 
-* HQ: FRR on pfSense, AS 65001, router ID `10.254.1.1`.
-* Branch: FortiOS, AS 65002, router ID `10.254.1.2`.
-* The GRE interface on pfSense has a permissive rule, and the FRR prefix list is `PERMIT-ALL` (no prefix filtering, see Section 9).
+- HQ: FRR on pfSense, AS 65001, router ID `10.254.1.1`.
+- Branch: FortiOS, AS 65002, router ID `10.254.1.2`.
+- The GRE interface on pfSense has a permissive rule, and the FRR prefix list is `PERMIT-ALL` (no prefix filtering, see Section 9).
 
-![Figure 4.1: GRE interface firewall rule](./images/p2_13_gre_rule.png)
+![Figure 4.1: GRE interface firewall rule](./images/lld-gre-rule.png)
 
-![Figure 4.2: FRR prefix list](./images/p2_14_frr_prefix_list.png)
+![Figure 4.2: FRR prefix list](./images/lld-bgp-prefix.png)
 
 ### 4.2 Verification
 
-![Figure 4.3: FortiGate BGP summary](./images/p2_15_fortigate_bgp_summary.png)
+![Figure 4.3: FortiGate BGP summary](./images/uat-forti-bgp-sum.png)
 
-![Figure 4.4: FortiGate BGP routing table](./images/p2_16_fortigate_bgp_routes.png)
+![Figure 4.4: FortiGate BGP routing table](./images/uat-forti-bgp-route.png)
 
-![Figure 4.5: pfSense FRR route table](./images/p2_17_pfsense_frr_routes.png)
+![Figure 4.5: pfSense FRR route table](./images/uat-pfsense-bgp.png)
 
-* The FortiGate neighbor `10.254.1.1` is Established with 6 received prefixes.
-* The FortiGate learns HQ LAN `10.10.10.0/24` and DMZ `10.10.200.0/24`, and pfSense learns `10.20.10.0/24` via `10.254.1.2` on `gre0`.
+- The FortiGate neighbor `10.254.1.1` is Established with 6 received prefixes.
+- The FortiGate learns HQ LAN `10.10.10.0/24` and DMZ `10.10.200.0/24`, and pfSense learns `10.20.10.0/24` via `10.254.1.2` on `gre0`.
 
 ### 4.3 Reachability test
 
-![Figure 4.6: FortiGate to HQ gateway ping](./images/p2_18_ping_fortigate_to_hq.png)
+![Figure 4.6: FortiGate to HQ gateway ping](./images/uat-ping-hq.png)
 
-* Ping from the **FortiGate itself** to the HQ gateway `10.10.10.1`: 5 sent, 5 received, 0% loss, average RTT 3.0 ms. This confirms the tunnel and the return route.
-* A ping from a **branch host** to an **HQ host** was not completed in this lab (Section 9).
+- Ping from the **FortiGate itself** to the HQ gateway `10.10.10.1`: 5 sent, 5 received, 0% loss, average RTT 3.0 ms. This confirms the tunnel and the return route.
+- A ping from a **branch host** to an **HQ host** was not completed in this lab (Section 9).
 
 ---
 
@@ -139,10 +138,10 @@ The FortiGate Phase 1 targets remote gateway `198.51.100.2` through `port3`.
 
 ### 5.1 Deployment
 
-* Suricata runs on pfSense **WAN1 (`vtnet2`)** in **Legacy Mode**: traffic is analyzed from a packet capture, and on an alert the source IP is added to the `snort2c` table so later traffic from that host is dropped.
-* Because it is not inline, the packet that triggers an alert is not itself stopped. In the RCE test (Section 6.1) the request succeeded and was detected.
+- Suricata runs on pfSense **WAN1 (`vtnet2`)** in **Legacy Mode**: traffic is analyzed from a packet capture, and on an alert the source IP is added to the `snort2c` table so later traffic from that host is dropped.
+- Because it is not inline, the packet that triggers an alert is not itself stopped. In the RCE test (Section 6.1) the request succeeded and was detected.
 
-![Figure 5.1: Suricata status on WAN1](./images/p2_19_suricata_status.png)
+![Figure 5.1: Suricata status on WAN1](./images/lld-suri-wan.png)
 
 ### 5.2 Custom signatures
 
@@ -152,9 +151,8 @@ Only custom rules were used in this lab. The messages are in Vietnamese without 
 alert udp any any -> any 9999 (msg:"CANH BAO: Phat hien goi tin doc hai TEST LAB"; content:"malware_payload"; nocase; sid:9000001; rev:1;)
 alert udp any any -> any 53 (msg:"CANH BAO: Phat hien truy van ten mien doc hai C2"; content:"c2-server"; nocase; sid:9000005; rev:1;)
 alert tcp any any -> any 80 (msg:"CANH BAO: Tan cong doc file nhay cam Web noi bo"; content:"etc/passwd"; nocase; sid:9000010; rev:1;)
+alert tcp any any -> any 80 (msg:"CANH BAO: Phat hien Command Injection whoami"; content:"whoami"; nocase; sid:9000021; rev:1;)
 alert tcp any any -> any 4444 (msg:"CANH BAO NGUY HIEM: Phat hien ket noi ra C2 Server"; flow:to_server; sid:9000030; rev:2;)
-[PASTE the rule for SID 9000021 (command injection) here]
-```
 
 ![Figure 5.2: Custom rules editor](./images/p2_20_suricata_custom_rules.png)
 
