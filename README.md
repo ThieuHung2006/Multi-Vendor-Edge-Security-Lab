@@ -153,23 +153,24 @@ alert udp any any -> any 53 (msg:"CANH BAO: Phat hien truy van ten mien doc hai 
 alert tcp any any -> any 80 (msg:"CANH BAO: Tan cong doc file nhay cam Web noi bo"; content:"etc/passwd"; nocase; sid:9000010; rev:1;)
 alert tcp any any -> any 80 (msg:"CANH BAO: Phat hien Command Injection whoami"; content:"whoami"; nocase; sid:9000021; rev:1;)
 alert tcp any any -> any 4444 (msg:"CANH BAO NGUY HIEM: Phat hien ket noi ra C2 Server"; flow:to_server; sid:9000030; rev:2;)
+```
 
-![Figure 5.2: Custom rules editor](./images/p2_20_suricata_custom_rules.png)
+![Figure 5.2: Custom rules editor](./images/lld-suri-rule.png)
 
 ### 5.3 Reactive blocking
 
-![Figure 5.3: Blocked hosts table](./images/p2_21_blocked_hosts.png)
+![Figure 5.3: Blocked hosts table](./images/uat-ips-block.png)
 
-* After detection, attacker `203.0.113.6` appears in the blocked hosts table.
-* Test: after the block, ping from the attacker to the WAN1 address is dropped.
+- After detection, attacker `203.0.113.6` appears in the blocked hosts table.
+- Test: after the block, ping from the attacker to the WAN1 address is dropped.
 
 ### 5.4 Detection tests from Kali
 
-![Figure 5.4: UDP payload alert (SID 9000001)](./images/p2_22_alert_udp.png)
+![Figure 5.4: UDP payload alert (SID 9000001)](./images/uat-alert-udp.png)
 
-![Figure 5.5: Malicious DNS query alert (SID 9000005)](./images/p2_23_alert_dns.png)
+![Figure 5.5: Malicious DNS query alert (SID 9000005)](./images/uat-alert-dns.png)
 
-![Figure 5.6: LFI alert (SID 9000010)](./images/p2_24_alert_lfi.png)
+![Figure 5.6: LFI alert (SID 9000010)](./images/uat-alert-lfi.png)
 
 ---
 
@@ -177,27 +178,25 @@ alert tcp any any -> any 4444 (msg:"CANH BAO NGUY HIEM: Phat hien ket noi ra C2 
 
 ### 6.1 Command injection against WEB1
 
-* WEB1 (`10.10.200.11:80`) is reached from Kali through a port forward on pfSense WAN1.
-* `test.php` is a deliberately vulnerable lab page, not a real application.
-* Payload: `curl "http://198.51.100.2/test.php?input=;whoami"`. The server returned `root`, and Suricata raised an alert (SID 9000021).
+- WEB1 (`10.10.200.11:80`) is reached from Kali through a port forward on pfSense WAN1.
+- `test.php` is a deliberately vulnerable lab page, not a real application.
+- Payload: `curl "http://198.51.100.2/test.php?input=;whoami"`. The server returned `root`, and Suricata raised an alert (SID 9000021).
 
-![Figure 6.1: Command injection on Kali and target output](./images/p2_25_rce_test.png)
+![Figure 6.1: Command injection on Kali and target output](./images/uat-rce-kali.png)
 
 ### 6.2 Remote logging
 
-* pfSense forwards Suricata alerts by syslog (UDP 514) to WEB2 (`10.10.200.12`) in the DMZ, along with EVE JSON (flow ID, addresses and ports, HTTP metadata, payload).
-* This is a simulation of a central log server. WEB2 sits in the same DMZ as WEB1 and UDP syslog is neither authenticated nor encrypted, so it does not provide tamper resistance.
+- pfSense forwards Suricata alerts by syslog (UDP 514) to WEB2 (`10.10.200.12`) in the DMZ, along with EVE JSON (flow ID, addresses and ports, HTTP metadata, payload).
+- This is a simulation of a central log server. WEB2 sits in the same DMZ as WEB1 and UDP syslog is neither authenticated nor encrypted, so it does not provide tamper resistance.
 
-![Figure 6.2: Syslog on WEB2 for the injection alert](./images/syslog_rce.png)
+![Figure 6.2: Syslog on WEB2 for the injection alert](./images/uat-rce-syslog.png)
 
 ### 6.3 Egress C2 detection
 
-* WEB1 connects out to Kali on TCP 4444: `echo "connect-to-c2" | nc -w 1 203.0.113.6 4444`.
-* The traffic is source-NATed to `198.51.100.2` on WAN1. Suricata on WAN1 therefore sees the translated source address, and the alert (SID 9000030) reached WEB2.
+- WEB1 connects out to Kali on TCP 4444: `echo "connect-to-c2" | nc -w 1 203.0.113.6 4444`.
+- The traffic is source-NATed to `198.51.100.2` on WAN1. Suricata on WAN1 therefore sees the translated source address, and the alert (SID 9000030) reached WEB2.
 
-![Figure 6.3: Egress C2 alert in syslog](./images/syslog_c2.png)
-
----
+![Figure 6.3: Egress C2 alert in syslog](./images/uat-c2-syslog.png)
 
 ## 7. Acceptance Matrix
 
