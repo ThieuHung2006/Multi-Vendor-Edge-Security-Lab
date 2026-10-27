@@ -1,5 +1,6 @@
-# Multi-Vendor Edge Security Lab: pfSense and FortiGate with Multi-WAN, IPsec/GRE with eBGP, Suricata IPS and Remote Logging (EVE-NG)
+# Multi-Vendor Edge Security Lab: pfSense and FortiGate with Multi-WAN, IPsec/GRE with eBGP, Suricata IDS/IPS and Remote Logging (EVE-NG)
 
+**Author:** [Your name]
 **Platform:** pfSense CE (HQ), Fortinet FortiGate-VM (Branch), Cisco IOL (ISPs), Kali Linux, EVE-NG
 **Type:** Simulated lab / Proof of Concept. This is not a production deployment.
 
@@ -100,6 +101,15 @@ The FortiGate Phase 1 targets remote gateway `198.51.100.2` through `port3`.
 
 ![Figure 3.6: FortiGate GRE interface status](./images/uat-gre-status.png)
 
+**Design rationale: why GRE over IPsec.** Each protocol covers a weakness of the other:
+
+| | Strength | Weakness |
+| :--- | :--- | :--- |
+| IPsec | Encryption, integrity and peer authentication | Does not give a simple point-to-point routed interface by itself; policy-based IPsec carries only traffic matching its selectors |
+| GRE | A plain point-to-point interface that can carry routing protocols (here eBGP) and any IP traffic | No encryption and no authentication |
+
+Running GRE inside the IPsec tunnel gives a routable tunnel interface (`10.254.1.0/30`) for BGP, while IPsec protects the GRE traffic. The cost is extra encapsulation overhead (GRE header on top of ESP), which lowers the effective MTU; this was not measured in this lab.
+
 ---
 
 ## 4. Dynamic Routing: eBGP over GRE
@@ -139,7 +149,7 @@ The FortiGate Phase 1 targets remote gateway `198.51.100.2` through `port3`.
 ### 5.1 Deployment
 
 - Suricata runs on pfSense **WAN1 (`vtnet2`)** in **Legacy Mode**: traffic is analyzed from a packet capture, and on an alert the source IP is added to the `snort2c` table so later traffic from that host is dropped.
-- Because it is not inline, the packet that triggers an alert is not itself stopped. In the RCE test (Section 6.1) the request succeeded and was detected.
+- Because it is not inline, the packet that triggers an alert is not itself stopped. In the command injection test (Section 6.1) the request succeeded and was detected.
 
 ![Figure 5.1: Suricata status on WAN1](./images/lld-suri-wan.png)
 
@@ -198,12 +208,14 @@ alert tcp any any -> any 4444 (msg:"CANH BAO NGUY HIEM: Phat hien ket noi ra C2 
 
 ![Figure 6.3: Egress C2 alert in syslog](./images/uat-c2-syslog.png)
 
+---
+
 ## 7. Acceptance Matrix
 
 | Test ID | Category | Procedure | Expected | Observed | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **NET-01** | DHCP | Boot VPCS on HQ LAN, run `dhcp` | Address in `10.10.10.50` to `.100` | `10.10.10.50/24`, lease on pfSense | PASSED |
-| **NET-02** | Multi-WAN failover | Fail WAN1, observe default route | Internet traffic moves to WAN2 | [ATTACH screenshot and measured packet loss] | PASSED |
+| **NET-02** | Multi-WAN failover | Fail WAN1, observe default route | Internet traffic moves to WAN2 | Gateway group changed state and the default route moved to WAN2; packet loss during the switch was not measured | PASSED (loss not measured) |
 | **VPN-03** | IPsec and GRE | Check SA and GRE state on both ends | IKEv2 SA up, GRE `UP` | Tunnel up, MTU 1476 shown | PASSED |
 | **RTE-04** | eBGP | `get router info bgp summary` and `vtysh` | Established, prefixes exchanged | Established, 6 prefixes | PASSED |
 | **RTE-05** | Control-plane reachability | Ping from FortiGate to HQ gateway `10.10.10.1` | 100% success | 5/5, 0% loss, average 3.0 ms | PASSED |
@@ -219,8 +231,7 @@ alert tcp any any -> any 4444 (msg:"CANH BAO NGUY HIEM: Phat hien ket noi ra C2 
 
 | Issue | Cause | Resolution |
 | :--- | :--- | :--- |
-| Ping from a branch host to the HQ gateway got no reply, while ping from the FortiGate worked | FortiGate policy `LAN_TO_GRE` had NAT enabled, so branch traffic left with the tunnel address instead of its own | Disabled NAT on the inter-site policy, and kept NAT only on the Internet-bound policies |
-| IPsec tunnel carried routing unreliably between vendors | Dynamic routing over a pure VTI between pfSense and FortiGate was not used | GRE was run inside the IPsec tunnel and BGP over GRE |
+| Ping from a branch host to the HQ gateway got no reply, while ping from the FortiGate worked | FortiGate policy `LAN_TO_GRE` had NAT enabled, so branch traffic left with the tunnel address instead of its own | Disabled NAT on the inter-site policy and kept NAT only on the Internet-bound policies. The final host-to-host re-test was not completed (see RTE-06) |
 
 ---
 
@@ -228,6 +239,7 @@ alert tcp any any -> any 4444 (msg:"CANH BAO NGUY HIEM: Phat hien ket noi ra C2 
 
 * **Lab environment.** Everything runs on virtual devices in EVE-NG. No throughput, scale or production behavior is claimed.
 * **Single VPN tunnel.** The tunnel runs over WAN1 only. When WAN1 fails, Internet access moves to WAN2, but the site-to-site VPN does not.
+* **Failover time not measured.** The WAN failover was observed but the packet loss during the switch was not recorded.
 * **No prefix filtering.** The FRR prefix list is `PERMIT-ALL`. The FortiGate also learns the HQ WAN subnet over BGP, which risks recursive routing toward the tunnel endpoint. Filtering should allow only the three internal subnets.
 * **Branch host to HQ host not tested.** This could not be completed because of a license limitation on the FortiGate-VM, so reachability is shown only from the FortiGate itself.
 * **Suricata uses only custom rules.** No community rule set was used. Legacy Mode detects and then blocks later traffic, so the triggering packet is not stopped.
@@ -238,7 +250,7 @@ alert tcp any any -> any 4444 (msg:"CANH BAO NGUY HIEM: Phat hien ket noi ra C2 
 
 ## 10. Skills Demonstrated
 
-* Interoperability between pfSense (FreeBSD) and FortiGate (FortiOS) using IKEv2, GRE and eBGP.
+* Interoperability between pfSense (FreeBSD) and FortiGate (FortiOS) using IKEv2, GRE and eBGP, and the reasoning behind combining GRE with IPsec.
 * Multi-WAN configuration, and the difference between Internet failover and VPN redundancy.
 * Writing custom Suricata signatures, and understanding where IPS inspection sits relative to NAT: inbound traffic is seen before port forwarding, and outbound traffic after source NAT.
 * Troubleshooting with flow debug, sniffer captures and firewall logs, documented in Section 8.
